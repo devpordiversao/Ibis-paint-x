@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TDZ Painter</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: sans-serif; background: #e8e8e8; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+        .top-bar { background: linear-gradient(135deg, #00a8ff, #0088cc); color: white; padding: 8px 15px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+        .app-icon { width: 45px; height: 45px; background: transparent; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .app-icon img { width: 100%; height: 100%; object-fit: contain; }
+        .tool-bar-top { background: #d0d0d0; padding: 8px; display: flex; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .tool-icon { width: 42px; height: 42px; background: #a0a0a0; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 20px; border: 2px solid transparent; }
+        .tool-icon:active { background: #8a8a8a; transform: scale(0.95); }
+        .tool-icon.active { background: #5865F2; border-color: #fff; }
+        .spacer { flex: 1; }
+        .canvas-area { flex: 1; background: #fff; overflow: hidden; position: relative; }
+        .canvas-wrapper { position: absolute; top: 50%; left: 50%; transform-origin: center; transition: none; }
+        #canvas { box-shadow: 0 0 20px rgba(0,0,0,0.2); cursor: crosshair; display: block; }
+        #canvas.pan-mode { cursor: grab; }
+        #canvas.panning { cursor: grabbing; }
+        .bottom-controls { background: #c0c0c0; padding: 12px; }
+        .slider-group { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .slider-label { font-size: 14px; font-weight: 600; min-width: 35px; }
+        .slider-btn { width: 32px; height: 32px; background: #404040; color: white; border: none; border-radius: 50%; font-size: 20px; cursor: pointer; }
+        input[type="range"] { flex: 1; height: 8px; -webkit-appearance: none; background: #404040; border-radius: 4px; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; background: white; border: 2px solid #404040; border-radius: 50%; cursor: pointer; }
+        .opacity-slider { background: linear-gradient(to right, transparent, #404040) !important; }
+        .bottom-tool-bar { background: #303030; padding: 8px; display: flex; justify-content: space-around; }
+        .bottom-tool { width: 48px; height: 48px; background: transparent; border: none; color: white; font-size: 24px; cursor: pointer; border-radius: 8px; }
+        .bottom-tool:active { background: #404040; }
+        .bottom-tool.active { background: #5865F2; }
+        .bottom-tool img { width: 32px; height: 32px; }
+        .color-preview { width: 36px; height: 36px; border: 3px solid white; border-radius: 4px; background: #000; }
+        .layer-panel { position: fixed; right: -320px; top: 0; width: 320px; height: 100vh; background: white; box-shadow: -4px 0 12px rgba(0,0,0,0.3); transition: right 0.3s; z-index: 2000; display: flex; flex-direction: column; }
+        .layer-panel.open { right: 0; }
+        .layer-header { background: #5865F2; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .close-btn { background: transparent; border: none; color: white; font-size: 28px; cursor: pointer; }
+        .layer-content { flex: 1; overflow-y: auto; padding: 15px; }
+        .layer-controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 15px; }
+        .layer-btn { padding: 10px; background: #5865F2; color: white; border: none; border-radius: 8px; font-size: 11px; cursor: pointer; font-weight: 600; }
+        .layer-btn.delete { background: #ed4245; }
+        .layer-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+        .layer-item { background: #f5f5f5; border: 2px solid #ddd; border-radius: 10px; padding: 12px; cursor: pointer; }
+        .layer-item.active { border-color: #5865F2; background: #e8eaff; }
+        .layer-item-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .layer-visibility { font-size: 20px; cursor: pointer; }
+        .layer-name { flex: 1; font-weight: 600; font-size: 14px; }
+        .layer-opacity-control { display: flex; align-items: center; gap: 8px; }
+        .layer-opacity-control input { flex: 1; height: 6px; }
+        .setting-group { margin-bottom: 15px; }
+        .setting-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+        .setting-group select { width: 100%; padding: 10px; border: 2px solid #5865F2; border-radius: 8px; font-size: 14px; }
+        .checkbox-item { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; cursor: pointer; }
+        .checkbox-item input { width: 20px; height: 20px; cursor: pointer; }
+        .color-modal { position: fixed; bottom: -100%; left: 0; right: 0; background: white; border-radius: 20px 20px 0 0; box-shadow: 0 -4px 12px rgba(0,0,0,0.3); transition: bottom 0.3s; z-index: 3000; padding: 20px; }
+        .color-modal.open { bottom: 0; }
+        .color-modal h3 { margin-bottom: 20px; }
+        .color-modal input[type="color"] { width: 100%; height: 200px; border: none; }
+        .discord-btn { position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px; padding: 0; background: #5865F2; color: white; border: none; border-radius: 50%; cursor: pointer; box-shadow: 0 4px 12px rgba(88,101,242,0.4); z-index: 1500; display: flex; align-items: center; justify-content: center; }
+        .discord-btn:active { transform: scale(0.95); }
+        .admin-toggle { position: fixed; top: 65px; right: 90px; width: 30px; height: 30px; background: rgba(0,0,0,0.5); border: none; border-radius: 50%; cursor: pointer; z-index: 4999; }
+        .admin-panel { position: fixed; top: 60px; right: 20px; background: rgba(0,0,0,0.9); color: white; padding: 15px; border-radius: 10px; z-index: 5000; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+        .admin-panel.show { display: block; }
+        .admin-panel input { width: 100%; padding: 8px; margin: 5px 0; border: 2px solid #5865F2; border-radius: 5px; background: #222; color: white; }
+        .admin-panel button { width: 100%; padding: 10px; background: #5865F2; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 5px; }
+        .admin-panel button:hover { background: #4752C4; }
+        .password-field { position: relative; }
+        .password-field input { padding-right: 40px; }
+        .eye-toggle { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 18px; user-select: none; }
+        .zoom-controls { position: fixed; top: 110px; left: 20px; background: rgba(0,0,0,0.7); border-radius: 10px; padding: 10px; z-index: 4999; display: flex; flex-direction: column; gap: 5px; align-items: center; }
+        .zoom-icon { width: 25px; height: 25px; margin-bottom: 5px; cursor: pointer; }
+        .zoom-icon.active { filter: brightness(1.5); }
+        .zoom-btn { width: 30px; height: 30px; background: rgba(255,255,255,0.1); color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 18px; font-weight: bold; }
+        .zoom-btn:hover { background: rgba(255,255,255,0.2); }
+        .zoom-level { color: white; font-size: 11px; font-weight: bold; }
+        .toast { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); padding: 12px 24px; background: #303030; color: white; border-radius: 25px; z-index: 4000; opacity: 0; transition: opacity 0.3s; }
+        .toast.show { opacity: 1; }
+        .toast.success { background: #57f287; color: #0f5132; }
+        .toast.error { background: #ed4245; }
+    </style>
+</head>
+<body>
+    <div class="top-bar">
+        <div class="app-icon"><img src="https://i.imgur.com/eaVe3ea.png"></div>
+        <div style="flex:1;text-align:center;font-size:18px;font-weight:600">TDZ Painter</div>
+        <div style="font-size:12px">🔋 100%</div>
+    </div>
+    <div class="tool-bar-top">
+        <div class="tool-icon" onclick="undo()">↶</div>
+        <div class="tool-icon" onclick="redo()">↷</div>
+        <div class="spacer"></div>
+        <div class="tool-icon" onclick="togglePanel('layer')">📚</div>
+    </div>
+    <div class="canvas-area" id="canvasArea">
+        <div class="canvas-wrapper" id="canvasWrapper">
+            <canvas id="canvas" width="2480" height="3508"></canvas>
+        </div>
+    </div>
+    <div class="bottom-controls">
+        <div class="slider-group">
+            <span class="slider-label" id="sizeLabel">3</span>
+            <button class="slider-btn" onclick="changeSize(-1)">−</button>
+            <input type="range" id="brushSize" min="1" max="100" value="3" oninput="updateSize()">
+            <button class="slider-btn" onclick="changeSize(1)">+</button>
+        </div>
+        <div class="slider-group">
+            <span class="slider-label" id="opLabel">100</span>
+            <button class="slider-btn" onclick="changeOp(-1)">−</button>
+            <input type="range" id="opacity" class="opacity-slider" min="1" max="100" value="100" oninput="updateOp()">
+            <button class="slider-btn" onclick="changeOp(1)">+</button>
+        </div>
+    </div>
+    <div class="bottom-tool-bar">
+        <button class="bottom-tool active" onclick="setTool('brush')" id="brushBtn"><img src="https://i.imgur.com/XHoiUjo.png"></button>
+        <button class="bottom-tool" onclick="setTool('eraser')" id="eraserBtn"><img src="https://i.imgur.com/dJRGw5t.png"></button>
+        <button class="bottom-tool" onclick="setTool('fill')" id="fillBtn"><img src="https://i.imgur.com/aUeq86H.png"></button>
+        <button class="bottom-tool" onclick="togglePanel('color')"><div class="color-preview" id="colorPrev"></div></button>
+        <button class="bottom-tool" onclick="togglePanel('layer')">📚</button>
+    </div>
+    <div class="layer-panel" id="layerPanel">
+        <div class="layer-header"><h3>📚 Camadas</h3><button class="close-btn" onclick="togglePanel('layer')">×</button></div>
+        <div class="layer-content">
+            <div class="layer-controls">
+                <button class="layer-btn" onclick="addLayer()">➕ Nova</button>
+                <button class="layer-btn" onclick="dupLayer()">📋 Copiar</button>
+                <button class="layer-btn delete" onclick="delLayer()">🗑️ Excluir</button>
+            </div>
+            <div class="layer-list" id="layerList"></div>
+            <div class="setting-group">
+                <label>✏️ Modo de Mesclagem</label>
+                <select id="blendMode" onchange="updateBlend()">
+                    <option value="source-over">Normal</option>
+                    <option value="multiply">Multiplicar</option>
+                    <option value="screen">Tela</option>
+                    <option value="overlay">Sobrepor</option>
+                    <option value="darken">Escurecer</option>
+                    <option value="lighten">Clarear</option>
+                </select>
+            </div>
+            <div class="checkbox-item"><input type="checkbox" id="alphaLock"><label>🔒 Alpha Lock</label></div>
+        </div>
+    </div>
+    <div class="color-modal" id="colorModal">
+        <h3>🎨 Escolher Cor <button class="close-btn" onclick="togglePanel('color')" style="float:right;color:#333">×</button></h3>
+        <input type="color" id="colorPicker" value="#000000" oninput="updateColor()">
+    </div>
+    <div class="zoom-controls">
+        <img src="https://i.imgur.com/QaokSa5.png" class="zoom-icon" id="panTool" onclick="togglePan()" title="Ferramenta Mão">
+        <button class="zoom-btn" onclick="zoomIn()">+</button>
+        <span class="zoom-level" id="zoomLevel">100%</span>
+        <button class="zoom-btn" onclick="zoomOut()">−</button>
+        <button class="zoom-btn" onclick="resetZoom()" style="font-size:14px;">⟲</button>
+    </div>
+    <button class="discord-btn" onclick="sendDiscord()" title="Enviar para Discord">
+        <img src="https://i.imgur.com/Hme4Oq0.png" style="width:40px;height:40px;">
+    </button>
+    <button class="admin-toggle" onclick="toggleAdmin()">
+        <img src="https://i.imgur.com/xSbkahu.png" style="width:20px;height:20px;">
+    </button>
+    <div class="admin-panel" id="adminPanel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <h4>🔒 Admin Panel</h4>
+            <button onclick="toggleAdmin()" style="width:30px;height:30px;padding:0;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;">
+                <img src="https://i.imgur.com/xSbkahu.png" style="width:16px;height:16px;">
+            </button>
+        </div>
+        <input type="text" id="adminUser" placeholder="Usuário" value="">
+        <div class="password-field">
+            <input type="password" id="adminPass" placeholder="Senha" value="">
+            <span class="eye-toggle" onclick="togglePassword()">👁️</span>
+        </div>
+        <button onclick="verifyAdmin()">🔓 Login</button>
+        <div id="adminTools" style="display:none;">
+            <hr style="margin:15px 0;border-color:#555;">
+            <input type="text" id="imageUrl" placeholder="URL da imagem">
+            <button onclick="loadImage()">📥 Carregar Imagem</button>
+        </div>
+    </div>
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const c = document.getElementById('canvas'), ctx = c.getContext('2d'), wrapper = document.getElementById('canvasWrapper');
+        const webhook = 'https://discord.com/api/webhooks/1472694446700368004/AruLDYUFTyxDXQIQNRsojJMGoSdwOSHfNzLByC26bjydfuvp_4bkAj5x4d35U4sddkY3';
+        let layers = [], activeId = 0, idCounter = 0, drawing = false, lastX = 0, lastY = 0, tool = 'brush', color = '#000000';
+        let undoStack = [], redoStack = [], maxUndo = 20;
+        let zoomScale = 1, panX = 0, panY = 0, isPanning = false, panMode = false, startPanX = 0, startPanY = 0;
+        ctx.lineCap = ctx.lineJoin = 'round';
+
+        function updateCanvasTransform() {
+            wrapper.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${zoomScale})`;
+        }
+
+        function updateZoom() {
+            updateCanvasTransform();
+            document.getElementById('zoomLevel').textContent = Math.round(zoomScale * 100) + '%';
+        }
+
+        function zoomIn() { zoomScale = Math.min(zoomScale + 0.25, 3); updateZoom(); }
+        function zoomOut() { zoomScale = Math.max(zoomScale - 0.25, 0.25); updateZoom(); }
+        function resetZoom() { zoomScale = 1; panX = 0; panY = 0; updateZoom(); }
+
+        function togglePan() {
+            panMode = !panMode;
+            c.className = panMode ? 'pan-mode' : '';
+            document.getElementById('panTool').classList.toggle('active', panMode);
+            if (!panMode && tool !== 'brush') setTool('brush');
+        }
+
+        function saveHistory() {
+            if (undoStack.length >= maxUndo) undoStack.shift();
+            undoStack.push(c.toDataURL());
+            redoStack = [];
+        }
+
+        function undo() {
+            if (undoStack.length === 0) return toast('⚠️ Nada para desfazer', '');
+            redoStack.push(c.toDataURL());
+            const img = new Image();
+            img.src = undoStack.pop();
+            img.onload = () => { ctx.clearRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0); };
+        }
+
+        function redo() {
+            if (redoStack.length === 0) return toast('⚠️ Nada para refazer', '');
+            undoStack.push(c.toDataURL());
+            const img = new Image();
+            img.src = redoStack.pop();
+            img.onload = () => { ctx.clearRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0); };
+        }
+
+        function init() {
+            const bg = document.createElement('canvas'); bg.width = c.width; bg.height = c.height;
+            const bgCtx = bg.getContext('2d'); bgCtx.fillStyle = 'white'; bgCtx.fillRect(0, 0, c.width, c.height);
+            layers.push({id: idCounter++, name: 'Fundo', canvas: bg, visible: true, opacity: 100, blend: 'source-over', alpha: false});
+            addLayer(); render(); updateList(); saveHistory();
+        }
+
+        function addLayer() {
+            const l = document.createElement('canvas'); l.width = c.width; l.height = c.height;
+            layers.push({id: idCounter++, name: `Camada ${idCounter}`, canvas: l, visible: true, opacity: 100, blend: 'source-over', alpha: false});
+            activeId = idCounter - 1; updateList(); render();
+        }
+
+        function dupLayer() {
+            const layer = layers.find(l => l.id === activeId); if (!layer) return;
+            const n = document.createElement('canvas'); n.width = c.width; n.height = c.height;
+            n.getContext('2d').drawImage(layer.canvas, 0, 0);
+            layers.splice(layers.indexOf(layer) + 1, 0, {id: idCounter++, name: layer.name + ' cópia', canvas: n, visible: true, opacity: 100, blend: 'source-over', alpha: false});
+            activeId = idCounter - 1; updateList(); render();
+        }
+
+        function delLayer() {
+            if (layers.length <= 1) return toast('❌ Última camada!', 'error');
+            const i = layers.findIndex(l => l.id === activeId); layers.splice(i, 1);
+            activeId = layers[Math.max(0, i - 1)].id; updateList(); render();
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, c.width, c.height);
+            layers.forEach(l => { if (l.visible) { ctx.globalAlpha = l.opacity / 100; ctx.globalCompositeOperation = l.blend; ctx.drawImage(l.canvas, 0, 0); }});
+            ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+        }
+
+        function updateList() {
+            const list = document.getElementById('layerList'); list.innerHTML = '';
+            for (let i = layers.length - 1; i >= 0; i--) {
+                const l = layers[i], div = document.createElement('div');
+                div.className = 'layer-item' + (l.id === activeId ? ' active' : '');
+                div.innerHTML = `<div class="layer-item-header"><span class="layer-visibility" onclick="toggleVis(${l.id})">${l.visible ? '👁️' : '🚫'}</span><span class="layer-name">${l.name}</span></div>
+                <div class="layer-opacity-control"><input type="range" min="0" max="100" value="${l.opacity}" oninput="setOp(${l.id}, this.value)"><span>${l.opacity}%</span></div>`;
+                div.onclick = e => { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SPAN') { activeId = l.id; updateList(); }};
+                list.appendChild(div);
+            }
+            const a = layers.find(l => l.id === activeId);
+            if (a) { document.getElementById('blendMode').value = a.blend; document.getElementById('alphaLock').checked = a.alpha; }
+        }
+
+        function toggleVis(id) { layers.find(x => x.id === id).visible = !layers.find(x => x.id === id).visible; render(); updateList(); }
+        function setOp(id, v) { layers.find(x => x.id === id).opacity = v; render(); updateList(); }
+        function updateBlend() { const l = layers.find(x => x.id === activeId); if (l) { l.blend = document.getElementById('blendMode').value; render(); }}
+
+        function getPos(e) {
+            const r = c.getBoundingClientRect();
+            const cx = e.touches ? e.touches[0].clientX : e.clientX, cy = e.touches ? e.touches[0].clientY : e.clientY;
+            return { x: (cx - r.left) / zoomScale, y: (cy - r.top) / zoomScale };
+        }
+
+        function start(e) {
+            if (panMode) {
+                isPanning = true;
+                startPanX = (e.touches ? e.touches[0].clientX : e.clientX) - panX;
+                startPanY = (e.touches ? e.touches[0].clientY : e.clientY) - panY;
+                c.classList.add('panning');
+                return;
+            }
+            const p = getPos(e), l = layers.find(x => x.id === activeId); if (!l) return;
+            const lc = l.canvas.getContext('2d');
+            if (tool === 'fill') { saveHistory(); fill(lc, Math.floor(p.x), Math.floor(p.y)); render(); return; }
+            if (tool === 'brush' || tool === 'eraser') { drawing = true; lastX = p.x; lastY = p.y; saveHistory(); }
+        }
+
+        function draw(e) {
+            if (panMode && isPanning) {
+                panX = (e.touches ? e.touches[0].clientX : e.clientX) - startPanX;
+                panY = (e.touches ? e.touches[0].clientY : e.clientY) - startPanY;
+                updateCanvasTransform();
+                return;
+            }
+            if (!drawing) return;
+            const p = getPos(e), l = layers.find(x => x.id === activeId); if (!l) return;
+            const lc = l.canvas.getContext('2d');
+            if (l.alpha && tool === 'brush') { const d = lc.getImageData(Math.floor(p.x), Math.floor(p.y), 1, 1); if (d.data[3] === 0) return; }
+            lc.beginPath(); lc.moveTo(lastX, lastY); lc.lineTo(p.x, p.y);
+            if (tool === 'eraser') { lc.globalCompositeOperation = 'destination-out'; lc.globalAlpha = 1; lc.lineWidth = document.getElementById('brushSize').value * 2; }
+            else { lc.globalCompositeOperation = 'source-over'; lc.strokeStyle = color; lc.globalAlpha = document.getElementById('opacity').value / 100; lc.lineWidth = document.getElementById('brushSize').value; }
+            lc.stroke(); lastX = p.x; lastY = p.y; render();
+        }
+
+        function stop() { drawing = false; isPanning = false; c.classList.remove('panning'); }
+
+        function fill(lc, x, y) {
+            const img = lc.getImageData(0, 0, c.width, c.height), d = img.data, pos = (y * c.width + x) * 4;
+            const sr = d[pos], sg = d[pos + 1], sb = d[pos + 2], sa = d[pos + 3];
+            const rgb = color.match(/\w\w/g).map(h => parseInt(h, 16)); rgb.push(255);
+            if (sr === rgb[0] && sg === rgb[1] && sb === rgb[2] && sa === rgb[3]) return;
+            const stack = [[x, y]], vis = new Set();
+            while (stack.length) {
+                const [cx, cy] = stack.pop(), k = `${cx},${cy}`;
+                if (vis.has(k) || cx < 0 || cx >= c.width || cy < 0 || cy >= c.height) continue;
+                vis.add(k); const p = (cy * c.width + cx) * 4;
+                if (d[p] === sr && d[p + 1] === sg && d[p + 2] === sb && d[p + 3] === sa) {
+                    d[p] = rgb[0]; d[p + 1] = rgb[1]; d[p + 2] = rgb[2]; d[p + 3] = rgb[3];
+                    stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
+                }
+            }
+            lc.putImageData(img, 0, 0);
+        }
+
+        function setTool(t) { tool = t; panMode = false; c.className = ''; document.getElementById('panTool').classList.remove('active'); document.querySelectorAll('.bottom-tool').forEach(b => b.classList.remove('active')); document.getElementById(t + 'Btn').classList.add('active'); }
+        function updateSize() { document.getElementById('sizeLabel').textContent = document.getElementById('brushSize').value; }
+        function updateOp() { document.getElementById('opLabel').textContent = document.getElementById('opacity').value; }
+        function changeSize(d) { const s = document.getElementById('brushSize'); s.value = Math.max(1, Math.min(100, +s.value + d)); updateSize(); }
+        function changeOp(d) { const o = document.getElementById('opacity'); o.value = Math.max(1, Math.min(100, +o.value + d)); updateOp(); }
+        function updateColor() { color = document.getElementById('colorPicker').value; document.getElementById('colorPrev').style.background = color; }
+        function togglePanel(p) { if (p === 'layer') document.getElementById('layerPanel').classList.toggle('open'); if (p === 'color') document.getElementById('colorModal').classList.toggle('open'); }
+        function toast(m, t) { const el = document.getElementById('toast'); el.textContent = m; el.className = 'toast show ' + (t || ''); setTimeout(() => el.classList.remove('show'), 3000); }
+
+        const adminUsername = 'TDZadministrador', adminPassword = 'administradortdz'; let isAdmin = false;
+        function toggleAdmin() { document.getElementById('adminPanel').classList.toggle('show'); }
+        function togglePassword() { const p = document.getElementById('adminPass'), e = document.querySelector('.eye-toggle'); if (p.type === 'password') { p.type = 'text'; e.textContent = '🙈'; } else { p.type = 'password'; e.textContent = '👁️'; }}
+        function verifyAdmin() { const u = document.getElementById('adminUser').value.trim(), p = document.getElementById('adminPass').value; if (u === adminUsername && p === adminPassword) { isAdmin = true; document.getElementById('adminTools').style.display = 'block'; toast('✅ Acesso concedido!', 'success'); } else { toast('❌ Usuário ou senha incorretos!', 'error'); }}
+        function loadImage() {
+            if (!isAdmin) return toast('❌ Acesso negado!', 'error');
+            const url = document.getElementById('imageUrl').value.trim(); if (!url) return toast('⚠️ Digite uma URL!', 'error');
+            const img = new Image(); img.crossOrigin = 'anonymous';
+            img.onload = function() {
+                const layer = layers.find(x => x.id === activeId); if (!layer) return;
+                const lc = layer.canvas.getContext('2d'), scale = Math.min(c.width / img.width, c.height / img.height);
+                const w = img.width * scale, h = img.height * scale, x = (c.width - w) / 2, y = (c.height - h) / 2;
+                lc.drawImage(img, x, y, w, h); render(); saveHistory(); toast('✅ Imagem carregada!', 'success'); document.getElementById('imageUrl').value = '';
+            };
+            img.onerror = () => toast('❌ Erro ao carregar imagem!', 'error');
+            img.src = url;
+        }
+
+        async function sendDiscord() {
+            toast('📤 Enviando...', '');
+            try {
+                const blob = await new Promise(r => c.toBlob(r, 'image/png')), fd = new FormData();
+                fd.append('file', blob, 'desenho.png'); fd.append('content', '🎨 Novo desenho TDZ Painter!');
+                const res = await fetch(webhook, {method: 'POST', body: fd});
+                if (res.ok || res.status === 204) toast('✅ Enviado!', 'success'); else throw new Error();
+            } catch { toast('❌ Erro!', 'error'); }
+        }
+
+        c.addEventListener('mousedown', start); c.addEventListener('mousemove', draw); c.addEventListener('mouseup', stop); c.addEventListener('mouseout', stop);
+        c.addEventListener('touchstart', e => { e.preventDefault(); start(e); }); c.addEventListener('touchmove', e => { e.preventDefault(); draw(e); }); c.addEventListener('touchend', e => { e.preventDefault(); stop(); });
+        init();
+    </script>
+</body>
+</html>
